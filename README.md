@@ -1,36 +1,100 @@
 # Multi-Tool AI Integration
 
-This Python module provides a versatile toolset that integrates a calculator, a translation service, and an AI interaction framework. It is designed to process user inputs and perform actions based on predefined logic, utilizing both mathematical and language translation capabilities.
+This Python module provides a versatile toolset that integrates multiple utilities, including a calculator, translation service, Wikipedia search, unit and currency converters, and a timezone converter. It is designed to process user inputs and perform actions based on predefined logic, utilizing AI-powered interaction.
 
 ## Features
 
-- **Calculator**: Utilizes the SymPy library to evaluate mathematical expressions. It can handle complex calculations and return results or error messages if the input is invalid.
+### 1. **Advanced Calculator**
+- Utilizes the `sympy` library to evaluate mathematical expressions.
+- Supports basic arithmetic, percentages, and more complex calculations.
 
-- **Translator**: Leverages the `googletrans` library to translate text between languages. It requires the text to be translated and the destination language code as inputs.
+### 2. **Enhanced Translator**
+- Uses `googletrans` to detect and translate text between languages.
+- Requires text input and the destination language code.
 
-- **AI Interaction**: Connects to the OpenAI API to process user prompts and generate responses. It uses a chat history to maintain context and determine actions based on the AI's output.
+### 3. **Wikipedia Research Tool**
+- Fetches summarized information from Wikipedia using the `wikipedia` library.
+- Handles disambiguation errors by suggesting multiple possible matches.
+
+### 4. **Unit Converter**
+- Converts between physical units using `pint`.
+- Accepts input in the format `"10 meters to feet"`.
+
+### 5. **Time Zone Converter**
+- Fetches the current time in different time zones.
+- Supports inputs like `"UTC"` or any valid timezone.
+
+### 6. **Currency Converter** (requires API key)
+- Fetches real-time exchange rates from an API.
+- Converts between currencies based on current rates.
+
+### 7. **AI-Powered Interaction**
+- Uses OpenAI’s model to process user queries and determine the appropriate tool to use.
+- Maintains chat history for context-aware responses.
 
 ## Usage
 
-1. **Calculator**: Input a mathematical expression as a string to the `calculator` function to receive the evaluated result.
+1. **Calculator**:
+   ```python
+   result = calculator("25% of 80")
+   print(result)  # Outputs: 20.0
+   ```
 
-2. **Translator**: Provide the text and destination language code to the `translator` function to get the translated text.
+2. **Translator**:
+   ```python
+   translated_text = translator("Hello", "es")
+   print(translated_text)  # Outputs: "Hola (from en)"
+   ```
 
-3. **AI Interaction**: The module uses a loop to interact with the AI model, processing user prompts and executing actions like calculations or translations based on the AI's suggestions.
+3. **Wikipedia Search**:
+   ```python
+   info = wikipedia_search("quantum physics")
+   print(info)
+   ```
+
+4. **Unit Converter**:
+   ```python
+   conversion = unit_converter("10 meters to feet")
+   print(conversion)
+   ```
+
+5. **Time Zone Converter**:
+   ```python
+   current_time = time_converter("America/New_York")
+   print(current_time)
+   ```
+
+6. **Currency Converter**:
+   ```python
+   conversion = currency_converter("100 USD EUR")
+   print(conversion)
+   ```
+
+7. **Running the AI Chatbot**:
+   ```python
+   if __name__ == "__main__":
+       client = OpenAI(
+           base_url="https://openrouter.ai/api/v1",
+           api_key='your-api-key'
+       )
+       while True:
+           user_input = input("\nYour question: ")
+           if user_input.lower() in ['exit', 'quit']:
+               break
+           print(run_conversation(user_input))
+   ```
 
 ## Dependencies
 
-- `sympy`: For symbolic mathematics.
-- `googletrans`: For language translation.
-- `openai`: For AI model interaction.
+- `sympy` - For mathematical operations.
+- `googletrans` - For text translation.
+- `wikipedia` - For Wikipedia summaries.
+- `pint` - For unit conversions.
+- `pytz` - For timezone handling.
+- `requests` - For API requests (currency conversion).
+- `openai` - For AI-powered interactions.
 
-## Example
+## Notes
+- Ensure you have a valid API key for currency conversion.
+- The AI interaction is designed to intelligently determine the correct tool based on user input.
 
-```python
-# Calculate the factorial of 5
-result = calculator("1*2*3*4*5")
-print(result)
-
-# Translate "Hello" to Spanish
-translated_text = translator("Hello", "es")
-print(translated_text)
