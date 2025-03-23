@@ -1,137 +1,175 @@
-# Define the calculator tool
-
+# imports
 from sympy import sympify
-def calculator(expression):
-    try:
-        result = sympify(expression)
-        return result
-    except Exception as e:
-        return f"Error in calculation: {e}"
-
-calculator("1*2*3*4*5")
-
-# Define the translation tool
-
 from googletrans import Translator
-
-def translator(text, dest_lang):
-    translator = Translator()
-    try:
-        result = translator.translate(text, dest=dest_lang)
-        return result.text
-    except Exception as e:
-        return f"Error in translation: {e}"
-
-
 import re
-
-def extract_action_and_input(text):
-  action = re.search(r"Action: (.*)", text)
-  action_input = re.search(r"Action Input: (.*)", text)
-  return action.group(1).strip() if action else None, action_input.group(1).strip() if action else None
-
-extract_action_and_input("""
-Thought: To calculate the square root of 144, I can use the math library in Python or a calculator.
-
-Action: Calculator
-Action Input: sqrt(144)
-""")
-
-
 from openai import OpenAI
+import wikipedia
+from pint import UnitRegistry
+from datetime import datetime
+import pytz
+import requests
 
-client = OpenAI(
-  base_url="https://openrouter.ai/api/v1",
-  api_key=('api-key-here'),
-)
-user_prompt = "Translate 'Hello' to Spanish"
+# ======================
+#Tools
+# ======================
 
+# 1. Calculator
+def calculator(expression):
+    """Handles complex mathematical expressions and unit conversions"""
+    try:
+        # Try regular calculation first
+        return sympify(expression)
+    except:
+        # Handle special cases like percentage calculations
+        if '%' in expression:
+            parts = expression.split('%')
+            if 'of' in parts[0]:
+                value, of = parts[0].split('of')
+                return f"{float(value.strip()) / 100 * float(of.strip())}"
+        return f"Error: Could not evaluate expression"
 
-chat_history = [
-    {
-      "role": "system",
-      "content": """
-      You have access to the following tools:
-      Calculator: Use this when you want to do math. Use SymPy expressions, eg: 2 + 2
-      Translator: Use this when you want to translate text. Provide the text and the destination language code, eg: "Hello", "es"
+# 2. Translator
+def translator(text, dest_lang):
+    """Translates text with language detection"""
+    try:
+        translator = Translator()
+        detected = translator.detect(text)
+        result = translator.translate(text, dest=dest_lang)
+        return f"{result.text} (from {detected.lang})"
+    except Exception as e:
+        return f"Translation error: {e}"
 
-      Use the following format:
+# 3. Wikipedia Research Tool
+def wikipedia_search(query):
+    """Provides summarized information from Wikipedia"""
+    try:
+        wikipedia.set_lang("en")
+        return wikipedia.summary(query, sentences=3)
+    except wikipedia.exceptions.DisambiguationError as e:
+        return f"Multiple matches: {', '.join(e.options[:5])}..."
+    except wikipedia.exceptions.PageError:
+        return "No information found"
 
-      Question: the input question you must answer
-      Thought: you should always think about what to do
-      Action: the action to take, should be one of [Calculator, Translator]
-      Action Input: the input to the action
-      Observation: the result of the action
-      ... (the Thought/Action/Observation can repeat any number of times)
-      Thought: I now know the final answer!
-      Final Answer: the answer to the original input question
-      """
-    },
-    {
-      "role": "user",
-      "content": f"Question: {user_prompt}"
-    }
-  ]
+# 4. Unit Converter
+ureg = UnitRegistry()
+def unit_converter(input_str):
+    """Converts between physical units"""
+    try:
+        quantity, target_unit = input_str.split(' to ')
+        converted = ureg(quantity).to(target_unit)
+        return f"{converted.magnitude:.2f} {converted.units}"
+    except Exception as e:
+        return f"Conversion error: {e}"
 
+# 5. Time Zone Converter
+def time_converter(query):
+    """Gets current time in different timezones"""
+    try:
+        tz = pytz.timezone(query) if query else None
+        return datetime.now(tz).strftime("%Y-%m-%d %H:%M:%S %Z")
+    except pytz.UnknownTimeZoneError:
+        return "Invalid timezone"
 
-import re
+# 6. Currency Converter (requires API key)
+EXCHANGE_API_KEY = 'your-api-key'
+def currency_converter(input_str):
+    """Converts between currencies using real-time rates"""
+    try:
+        amount, from_curr, to_curr = input_str.split()
+        url = f"https://api.exchangerate-api.com/v4/latest/{from_curr.upper()}"
+        response = requests.get(url)
+        rate = response.json()['rates'][to_curr.upper()]
+        return f"{float(amount) * rate:.2f} {to_curr.upper()}"
+    except Exception as e:
+        return f"Currency error: {e}"
 
-while True:
-  completion = client.chat.completions.create(
-    model="meta-llama/llama-3.2-90b-vision-instruct:free",
-    messages=chat_history,
-    stop=["Observation:"]
-  )
-  response_text = completion.choices[0].message.content
-  action, action_input = extract_action_and_input(response_text)
-  print(response_text)
-  # We want to see if the LLM took an action
-  if action == "Calculator":
-    action_result = calculator(action_input)
-    print(f"Observation: {action_result}")
-    chat_history.extend([
-      { "role": "assistant", "content": response_text },
-      { "role": "user", "content": f"Observation: {action_result}" }
-    ])
-  elif action == "Translator":
-    # Extract text and destination language from action_input
-    match = re.match(r'"(.*?)", "(.*?)"', action_input)
-    if match:
-        text, dest_lang = match.groups()
-        action_result = translator(text, dest_lang)
-        print(f"Observation: {action_result}")
-        chat_history.extend([
-          { "role": "assistant", "content": response_text },
-          { "role": "user", "content": f"Observation: {action_result}" }
-        ])
+# ======================
+#System Prompt
+# ======================
+system_prompt = """
+You have access to these tools:
+1. Calculator: For math operations. Input: "sqrt(144)" or "25% of 80"
+2. Translator: Translate text. Input: "Hello", "es"
+3. Wikipedia: Get factual info. Input: "quantum physics"
+4. UnitConverter: Convert units. Input: "10 meters to feet"
+5. TimeConverter: Get current time. Input: "UTC" or blank for local
+6. CurrencyConverter: Convert money. Input: "100 usd eur"
+
+Follow this format:
+Question: [user question]
+Thought: [your reasoning]
+Action: [tool name]
+Action Input: [tool input]
+Observation: [tool result]
+... (repeat as needed)
+Thought: I have the answer
+Final Answer: [complete answer]
+"""
+
+# ======================
+# Processing
+# ======================
+def handle_action(action, action_input):
+    """Process different tool requests"""
+    if action == "Calculator":
+        return calculator(action_input)
+    elif action == "Translator":
+        parts = action_input.split('", "')
+        return translator(parts[0][1:], parts[1][:-1])
+    elif action == "Wikipedia":
+        return wikipedia_search(action_input)
+    elif action == "UnitConverter":
+        return unit_converter(action_input)
+    elif action == "TimeConverter":
+        return time_converter(action_input)
+    elif action == "CurrencyConverter":
+        return currency_converter(action_input)
     else:
-        action_result = "Error: Invalid input format for Translator."
-        print(f"Observation: {action_result}")
+        return "Unknown action"
+
+# ======================
+# Improved Interaction Loop
+# ======================
+def run_conversation(user_query):
+    chat_history = [
+        {"role": "system", "content": system_prompt},
+        {"role": "user", "content": f"Question: {user_query}"}
+    ]
+    
+    while True:
+        response = client.chat.completions.create(
+            model="meta-llama/llama-3.2-90b-vision-instruct:free",
+            messages=chat_history,
+            stop=["Observation:"]
+        )
+        
+        response_text = response.choices[0].message.content
+        action, action_input = extract_action_and_input(response_text)
+        
+        if not action:
+            break
+            
+        result = handle_action(action, action_input)
+        print(f"Action: {action}\nInput: {action_input}\nResult: {result}")
+        
         chat_history.extend([
-          { "role": "assistant", "content": response_text },
-          { "role": "user", "content": f"Observation: {action_result}" }
+            {"role": "assistant", "content": response_text},
+            {"role": "user", "content": f"Observation: {result}"}
         ])
-  else:
-    break
+    
+    return response_text
 
-print(response_text)
-
-
-calculator("sqrt(144)")
-
-chat_history
-
-chat_history.extend([
-    { "role": "assistant", "content": response_text },
-    { "role": "user", "content": "Observation: The knife did not work! A tree has fallen down between you and the present." }
-])
-
-chat_history
-
-completion = client.chat.completions.create(
-  model="meta-llama/llama-3.2-90b-vision-instruct:free",
-  messages=chat_history
-)
-response_text = completion.choices[0].message.content
-
-response_text
+# ======================
+# Usage Example
+# ======================
+if __name__ == "__main__":
+    client = OpenAI(
+        base_url="https://openrouter.ai/api/v1",
+        api_key='your-api-key'
+    )
+    
+    while True:
+        user_input = input("\nYour question: ")
+        if user_input.lower() in ['exit', 'quit']:
+            break
+        print(run_conversation(user_input))
